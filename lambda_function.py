@@ -11,7 +11,7 @@ def parse_int(n):
         return int(n)
     except ValueError:
         return float("nan")
-
+ 
 
 def build_validation_result(is_valid, violated_slot, message_content):
     """
@@ -26,6 +26,56 @@ def build_validation_result(is_valid, violated_slot, message_content):
         "message": {"contentType": "PlainText", "content": message_content},
     }
 
+
+def validate_data(age, investment_amount, intent_request):
+    
+    if age is not None and investment_amount is not None: 
+            
+        age = parse_int(age)  
+        investment_amount = parse_int(investment_amount)
+        
+        # Validating age is greater than 0 and less than 65
+        if age < 0:
+            return build_validation_result(
+                False,
+                "age",
+                "The given age is not valid, "
+                "please provide your correct age.", 
+                )
+                
+        elif age > 65:
+            return build_validation_result(
+                False,
+                "age",
+                "Unfortunately you should already be in retirement, "
+                "please provide an age under 65 if you are still "
+                "interested in a portfolio recommendation",
+            )
+                
+            # validating investment amount is greater than 5000   
+        elif investment_amount < 5000:
+            return build_validation_result(
+                False,
+                "investmentAmount",
+                "The amount should be greater than $5,000. "
+                "Please provide a correct amount in dollars.",
+            )    
+    return build_validation_result(True, None, None)
+
+def get_recommendation(risk_level):
+    
+   
+    recommendation = ""
+    
+    if risk_level == "none":
+        recommendation = "it is recommended to invest in 100% bonds (AGG), 0% equities (SPY)."
+    elif risk_level == "low":
+        recommendation = "it is recommended to invest in 60% bonds (AGG), 40% equities (SPY)."
+    elif risk_level == "medium":
+        recommendation = "it is recommended to invest in 40% bonds (AGG), 60% equities (SPY)."
+    else:
+        recommendation = "it is recommended to invest in 20% bonds (AGG), 80% equities (SPY)."    
+    return recommendation
 
 ### Dialog Actions Helper Functions ###
 def get_slots(intent_request):
@@ -76,7 +126,6 @@ def close(session_attributes, fulfillment_state, message):
             "message": message,
         },
     }
-
     return response
 
 
@@ -123,8 +172,46 @@ def recommend_portfolio(intent_request):
     investment_amount = get_slots(intent_request)["investmentAmount"]
     risk_level = get_slots(intent_request)["riskLevel"]
     source = intent_request["invocationSource"]
+    
 
-    # YOUR CODE GOES HERE!
+    if source == "DialogCodeHook":
+        
+        slots = get_slots(intent_request)
+        
+        validation_result = validate_data(age, investment_amount, intent_request)
+        
+        # If data is not valid, the elicitSlot dialog action will re-prompt for the first violation detected
+        if not validation_result["isValid"]:
+            slots[validation_result["violatedSlot"]] = None  # Cleans invalid slot
+            
+            # Returns an elicitSlot dialog to request new data for the invalid slot
+            return elicit_slot(
+                intent_request["sessionAttributes"],
+                intent_request["currentIntent"]["name"],
+                slots,
+                validation_result["violatedSlot"],
+                validation_result["message"],
+            )
+            
+        # Fetch current session attributes
+        output_session_attributes = intent_request["sessionAttributes"]
+        
+        # Once all slots are valid, a delegate dialog is returned to Lex to choose the next course of action.
+        return delegate(output_session_attributes, get_slots(intent_request))
+  
+    
+    return close(
+        intent_request["sessionAttributes"],
+        "Fulfilled",
+        {
+            "contentType": "PlainText",
+            "content": """Thank you for relying on us {}, based on your
+            risk level of '{}', {}.
+            """.format(
+                first_name, risk_level, get_recommendation(risk_level)
+            ),
+        },
+    )   
 
 
 ### Intents Dispatcher ###
@@ -150,3 +237,4 @@ def lambda_handler(event, context):
     """
 
     return dispatch(event)
+
