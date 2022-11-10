@@ -206,7 +206,7 @@ def recommend_portfolio(intent_request):
         {
             "contentType": "PlainText",
             "content": """Thank you for relying on us {}, based on your
-            risk level of '{}', {}.
+            risk level of '{}', {}
             """.format(
                 first_name, risk_level, get_recommendation(risk_level)
             ),
